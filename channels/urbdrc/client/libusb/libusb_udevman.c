@@ -347,69 +347,46 @@ static BOOL udevman_unregister_all_udevices(IUDEVMAN* idevman)
 	return TRUE;
 }
 
-static BOOL udevman_parse_device_addr(const char* str, size_t maxLen, UINT8* id1, UINT8* id2,
+static BOOL udevman_parse_device_addr(const char* str, UINT8* id1, UINT8* id2,
                                       char sign)
 {
 	unsigned long rc;
-	char s1[8] = { 0 };
-	char* s2 = strchr(str, sign);
-	size_t len = strnlen(str, maxLen);
-	size_t cpLen;
+	char* end1;
+	char* end2;
 
-	if (!s2)
-		return FALSE;
-	s2++;
+	rc = strtoul(str, &end1, 16);
 
-	cpLen = len - (strnlen(s2, len) + 1);
-
-	if (cpLen >= sizeof(s1))
-		cpLen = sizeof(s1) - 1;
-
-	strncpy(s1, str, cpLen);
-	rc = strtoul(s1, NULL, 16);
-
-	if ((rc > UINT8_MAX) || (errno != 0))
+	if ((rc > UINT8_MAX) || end1 == str || *end1 != sign)
 		return FALSE;
 
 	*id1 = (UINT8)rc;
-	rc = strtoul(s2, NULL, 16);
 
-	if ((rc > UINT8_MAX) || (errno != 0))
+	rc = strtoul(++end1, &end2, 16);
+
+	if ((rc > UINT8_MAX)  || end2 == end1 || *end2 != '\0')
 		return FALSE;
 
 	*id2 = (UINT8)rc;
 	return TRUE;
 }
 
-static BOOL udevman_parse_device_pid_vid(const char* str, size_t maxLen, UINT16* id1, UINT16* id2,
+static BOOL udevman_parse_device_pid_vid(const char* str, UINT16* id1, UINT16* id2,
                                          char sign)
 {
 	unsigned long rc;
-	char s1[8] = { 0 };
-	char* s2 = strchr(str, sign);
-	size_t len = strnlen(str, maxLen);
-	size_t cpLen;
+	char* end1
+	char* end2;
 
-	if (!s2)
-		return FALSE;
+	rc = strtoul(str, &end1, 16);
 
-	s2++; /* We need the PID, not ':' */
-	cpLen = len - (strnlen(s2, len) + 1);
-
-	if (cpLen >= sizeof(s1))
-		cpLen = sizeof(s1) - 1;
-
-	strncpy(s1, str, cpLen);
-	errno = 0;
-	rc = strtoul(s1, NULL, 16);
-
-	if ((rc > UINT16_MAX) || (errno != 0))
+	if ((rc > UINT16_MAX) || end1 == str || *end1 != sign)
 		return FALSE;
 
 	*id1 = (UINT16)rc;
-	rc = strtoul(s2, NULL, 16);
 
-	if ((rc > UINT16_MAX) || (errno != 0))
+	rc = strtoul(++end1, &end2, 16);
+
+	if ((rc > UINT16_MAX) || end2 == end1 || *end2 != '\0')
 		return FALSE;
 
 	*id2 = (UINT16)rc;
@@ -673,7 +650,6 @@ static BOOL urbdrc_udevman_register_devices(UDEVMAN* udevman, const char* device
 	char* token;
 	int success = 0;
 	char* tmp;
-	char hardware_id[16];
 	const char* default_devices = "id";
 
 	if (!devices)
@@ -682,19 +658,15 @@ static BOOL urbdrc_udevman_register_devices(UDEVMAN* udevman, const char* device
 		tmp = _strdup(devices);
 
 	/* register all usb devices */
-	token = strtok(tmp, "#");
+	token = strtok(tmp, "#"); /* TODO: thread-safe? */
 
 	while (token)
 	{
-		strcpy(hardware_id, token);
-		token = strtok(NULL, "#");
-
 		if (udevman->flags & UDEVMAN_FLAG_ADD_BY_VID_PID)
 		{
 			UINT16 idVendor, idProduct;
 
-			if (!udevman_parse_device_pid_vid(hardware_id, sizeof(hardware_id), &idVendor,
-			                                  &idProduct, ':'))
+			if (!udevman_parse_device_pid_vid(token, &idVendor, &idProduct, ':'))
 				goto fail;
 
 			success = add_device(&udevman->iface, DEVICE_ADD_FLAG_VENDOR | DEVICE_ADD_FLAG_PRODUCT,
@@ -704,13 +676,14 @@ static BOOL urbdrc_udevman_register_devices(UDEVMAN* udevman, const char* device
 		{
 			UINT8 bus_number, dev_number;
 
-			if (!udevman_parse_device_addr(hardware_id, sizeof(hardware_id), &bus_number,
-			                               &dev_number, ':'))
+			if (!udevman_parse_device_addr(token, &bus_number, &dev_number, ':'))
 				goto fail;
 
 			success = add_device(&udevman->iface, DEVICE_ADD_FLAG_BUS | DEVICE_ADD_FLAG_DEV,
 			                     bus_number, dev_number, 0, 0);
 		}
+
+		token = strtok(NULL, "#");
 	}
 
 	rc = TRUE;
