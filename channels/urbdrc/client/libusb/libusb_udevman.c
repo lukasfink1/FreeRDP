@@ -347,49 +347,22 @@ static BOOL udevman_unregister_all_udevices(IUDEVMAN* idevman)
 	return TRUE;
 }
 
-static BOOL udevman_parse_device_addr(const char* str, UINT8* id1, UINT8* id2,
+static BOOL udevman_parse_device_id_addr(const char* str, unsigned long* id1, unsigned long* id2,
                                       char sign)
 {
-	unsigned long rc;
 	char* end1;
 	char* end2;
 
-	rc = strtoul(str, &end1, 16);
+	*id1 = strtoul(str, &end1, 16);
 
-	if ((rc > UINT8_MAX) || end1 == str || *end1 != sign)
+	if (end1 == str || *end1 != sign)
 		return FALSE;
 
-	*id1 = (UINT8)rc;
+	*id2 = strtoul(++end1, &end2, 16);
 
-	rc = strtoul(++end1, &end2, 16);
-
-	if ((rc > UINT8_MAX)  || end2 == end1 || *end2 != '\0')
+	if (end2 == end1 || *end2 != '\0')
 		return FALSE;
 
-	*id2 = (UINT8)rc;
-	return TRUE;
-}
-
-static BOOL udevman_parse_device_pid_vid(const char* str, UINT16* id1, UINT16* id2,
-                                         char sign)
-{
-	unsigned long rc;
-	char* end1
-	char* end2;
-
-	rc = strtoul(str, &end1, 16);
-
-	if ((rc > UINT16_MAX) || end1 == str || *end1 != sign)
-		return FALSE;
-
-	*id1 = (UINT16)rc;
-
-	rc = strtoul(++end1, &end2, 16);
-
-	if ((rc > UINT16_MAX) || end2 == end1 || *end2 != '\0')
-		return FALSE;
-
-	*id2 = (UINT16)rc;
 	return TRUE;
 }
 
@@ -651,6 +624,7 @@ static BOOL urbdrc_udevman_register_devices(UDEVMAN* udevman, const char* device
 	int success = 0;
 	char* tmp;
 	const char* default_devices = "id";
+	unsigned long id1, id2;
 
 	if (!devices)
 		tmp = _strdup(default_devices);
@@ -662,25 +636,24 @@ static BOOL urbdrc_udevman_register_devices(UDEVMAN* udevman, const char* device
 
 	while (token)
 	{
+		if (!udevman_parse_device_id_addr(token, &id1, &id2, ':'))
+			goto fail;
+
 		if (udevman->flags & UDEVMAN_FLAG_ADD_BY_VID_PID)
 		{
-			UINT16 idVendor, idProduct;
-
-			if (!udevman_parse_device_pid_vid(token, &idVendor, &idProduct, ':'))
+			if (id1 > UINT16_MAX || id2 > UINT16_MAX)
 				goto fail;
 
 			success = add_device(&udevman->iface, DEVICE_ADD_FLAG_VENDOR | DEVICE_ADD_FLAG_PRODUCT,
-			                     0, 0, idVendor, idProduct);
+			                     0, 0, (UINT16)id1, (UINT16)id2);
 		}
 		else if (udevman->flags & UDEVMAN_FLAG_ADD_BY_ADDR)
 		{
-			UINT8 bus_number, dev_number;
-
-			if (!udevman_parse_device_addr(token, &bus_number, &dev_number, ':'))
+			if (id1 > UINT8_MAX || id2 > UINT8_MAX)
 				goto fail;
 
 			success = add_device(&udevman->iface, DEVICE_ADD_FLAG_BUS | DEVICE_ADD_FLAG_DEV,
-			                     bus_number, dev_number, 0, 0);
+			                     (UINT8)id1, (UINT8)id2, 0, 0);
 		}
 
 		token = strtok(NULL, "#");
