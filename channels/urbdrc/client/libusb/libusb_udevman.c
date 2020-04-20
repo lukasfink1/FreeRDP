@@ -598,20 +598,24 @@ static void udevman_load_interface(UDEVMAN* udevman)
 	udevman->iface.initialize = udevman_initialize;
 }
 
-static BOOL udevman_parse_device_id_addr(char** str, unsigned long* id1, unsigned long* id2,
+static BOOL udevman_parse_device_id_addr(char** str, UINT16* id1, UINT16* id2, UINT16 max,
                                          char split_sign, char delimiter)
 {
 	char* mid;
+	unsigned long rc;
 
-	*id1 = strtoul(*str, &mid, 16);
+	rc = strtoul(*str, &mid, 16);
 
-	if ((mid == *str) || (*mid != split_sign))
+	if ((mid == *str) || (*mid != split_sign) || (rc > max))
 		return FALSE;
 
-	*id2 = strtoul(++mid, str, 16);
+	*id1 = (UINT16)rc;
+	rc = strtoul(++mid, str, 16);
 
-	if (*str == mid)
+	if ((*str == mid) || (rc > max))
 		return FALSE;
+
+	*id2 = (UINT16)rc;
 
 	if (**str == '\0')
 		return TRUE;
@@ -627,24 +631,21 @@ static BOOL udevman_parse_device_id_addr(char** str, unsigned long* id1, unsigne
 static BOOL urbdrc_udevman_register_devices(UDEVMAN* udevman, char* devices)
 {
 	char* pos = devices;
-	unsigned long id1, id2;
+	UINT16 id1, id2;
 
 	while (*pos != '\0')
 	{
-		if (!udevman_parse_device_id_addr(&pos, &id1, &id2, ':', '#'))
-			return FALSE;
-
 		if (udevman->flags & UDEVMAN_FLAG_ADD_BY_VID_PID)
 		{
-			if ((id1 > UINT16_MAX) || (id2 > UINT16_MAX))
+			if (!udevman_parse_device_id_addr(&pos, &id1, &id2, UINT16_MAX, ':', '#'))
 				return FALSE;
 
-			add_device(&udevman->iface, DEVICE_ADD_FLAG_VENDOR | DEVICE_ADD_FLAG_PRODUCT, 0, 0,
-			           (UINT16)id1, (UINT16)id2);
+			add_device(&udevman->iface, DEVICE_ADD_FLAG_VENDOR | DEVICE_ADD_FLAG_PRODUCT, 0, 0, id1,
+			           id2);
 		}
 		else if (udevman->flags & UDEVMAN_FLAG_ADD_BY_ADDR)
 		{
-			if ((id1 > UINT8_MAX) || (id2 > UINT8_MAX))
+			if (!udevman_parse_device_id_addr(&pos, &id1, &id2, UINT8_MAX, ':', '#'))
 				return FALSE;
 
 			add_device(&udevman->iface, DEVICE_ADD_FLAG_BUS | DEVICE_ADD_FLAG_DEV, (UINT8)id1,
