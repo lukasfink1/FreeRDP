@@ -347,23 +347,30 @@ static BOOL udevman_unregister_all_udevices(IUDEVMAN* idevman)
 	return TRUE;
 }
 
-static BOOL udevman_parse_device_id_addr(const char* str, unsigned long* id1, unsigned long* id2,
-                                      char sign)
+static BOOL udevman_parse_device_id_addr(char** str, unsigned long* id1, unsigned long* id2,
+                                         char split_sign, char delimiter)
 {
-	char* end1;
-	char* end2;
+	char* mid;
 
-	*id1 = strtoul(str, &end1, 16);
+	*id1 = strtoul(*str, &mid, 16);
 
-	if (end1 == str || *end1 != sign)
+	if (mid == *str || *mid != split_sign)
 		return FALSE;
 
-	*id2 = strtoul(++end1, &end2, 16);
+	*id2 = strtoul(++mid, str, 16);
 
-	if (end2 == end1 || *end2 != '\0')
+	if (*str == mid)
 		return FALSE;
 
-	return TRUE;
+	if (**str == '\0')
+		return TRUE;
+	if (**str == delimiter)
+	{
+		(*str)++;
+		return TRUE;
+	}
+
+	return FALSE;
 }
 
 static int udevman_is_auto_add(IUDEVMAN* idevman)
@@ -617,52 +624,35 @@ static void udevman_load_interface(UDEVMAN* udevman)
 	udevman->iface.initialize = udevman_initialize;
 }
 
-static BOOL urbdrc_udevman_register_devices(UDEVMAN* udevman, const char* devices)
+static BOOL urbdrc_udevman_register_devices(UDEVMAN* udevman, char* devices)
 {
-	BOOL rc = FALSE;
-	char* token;
-	int success = 0;
-	char* tmp;
-	const char* default_devices = "id";
+	char* pos = devices;
 	unsigned long id1, id2;
 
-	if (!devices)
-		tmp = _strdup(default_devices);
-	else
-		tmp = _strdup(devices);
-
-	/* register all usb devices */
-	token = strtok(tmp, "#"); /* TODO: thread-safe? */
-
-	while (token)
+	while (*pos != '\0')
 	{
-		if (!udevman_parse_device_id_addr(token, &id1, &id2, ':'))
-			goto fail;
+		if (!udevman_parse_device_id_addr(&pos, &id1, &id2, ':', '#'))
+			return FALSE;
 
 		if (udevman->flags & UDEVMAN_FLAG_ADD_BY_VID_PID)
 		{
 			if (id1 > UINT16_MAX || id2 > UINT16_MAX)
-				goto fail;
+				return FALSE;
 
-			success = add_device(&udevman->iface, DEVICE_ADD_FLAG_VENDOR | DEVICE_ADD_FLAG_PRODUCT,
-			                     0, 0, (UINT16)id1, (UINT16)id2);
+			add_device(&udevman->iface, DEVICE_ADD_FLAG_VENDOR | DEVICE_ADD_FLAG_PRODUCT, 0, 0,
+			           (UINT16)id1, (UINT16)id2);
 		}
 		else if (udevman->flags & UDEVMAN_FLAG_ADD_BY_ADDR)
 		{
 			if (id1 > UINT8_MAX || id2 > UINT8_MAX)
-				goto fail;
+				return FALSE;
 
-			success = add_device(&udevman->iface, DEVICE_ADD_FLAG_BUS | DEVICE_ADD_FLAG_DEV,
-			                     (UINT8)id1, (UINT8)id2, 0, 0);
+			add_device(&udevman->iface, DEVICE_ADD_FLAG_BUS | DEVICE_ADD_FLAG_DEV, (UINT8)id1,
+			           (UINT8)id2, 0, 0);
 		}
-
-		token = strtok(NULL, "#");
 	}
 
-	rc = TRUE;
-fail:
-	free(tmp);
-	return rc;
+	return TRUE;
 }
 
 static UINT urbdrc_udevman_parse_addin_args(UDEVMAN* udevman, ADDIN_ARGV* args)
