@@ -598,19 +598,20 @@ static void udevman_load_interface(UDEVMAN* udevman)
 	udevman->iface.initialize = udevman_initialize;
 }
 
-static BOOL udevman_parse_device_id_addr(char** str, UINT16* id1, UINT16* id2, UINT16 max,
+static BOOL udevman_parse_device_id_addr(const char** str, UINT16* id1, UINT16* id2, UINT16 max,
                                          char split_sign, char delimiter)
 {
-	char* mid;
+	const char* mid;
 	unsigned long rc;
 
-	rc = strtoul(*str, &mid, 16);
+	rc = strtoul(*str, (char**)&mid, 16);
+	/* These casts are safe, because strtoul only uses it to return a pointer */
 
 	if ((mid == *str) || (*mid != split_sign) || (rc > max))
 		return FALSE;
 
 	*id1 = (UINT16)rc;
-	rc = strtoul(++mid, str, 16);
+	rc = strtoul(++mid, (char**)str, 16);
 
 	if ((*str == mid) || (rc > max))
 		return FALSE;
@@ -628,9 +629,9 @@ static BOOL udevman_parse_device_id_addr(char** str, UINT16* id1, UINT16* id2, U
 	return FALSE;
 }
 
-static BOOL urbdrc_udevman_register_devices(UDEVMAN* udevman, char* devices)
+static BOOL urbdrc_udevman_register_devices(UDEVMAN* udevman, const char* devices)
 {
-	char* pos = devices;
+	const char* pos = devices;
 	UINT16 id1, id2;
 
 	while (*pos != '\0')
