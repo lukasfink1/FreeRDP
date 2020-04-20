@@ -347,32 +347,6 @@ static BOOL udevman_unregister_all_udevices(IUDEVMAN* idevman)
 	return TRUE;
 }
 
-static BOOL udevman_parse_device_id_addr(char** str, unsigned long* id1, unsigned long* id2,
-                                         char split_sign, char delimiter)
-{
-	char* mid;
-
-	*id1 = strtoul(*str, &mid, 16);
-
-	if (mid == *str || *mid != split_sign)
-		return FALSE;
-
-	*id2 = strtoul(++mid, str, 16);
-
-	if (*str == mid)
-		return FALSE;
-
-	if (**str == '\0')
-		return TRUE;
-	if (**str == delimiter)
-	{
-		(*str)++;
-		return TRUE;
-	}
-
-	return FALSE;
-}
-
 static int udevman_is_auto_add(IUDEVMAN* idevman)
 {
 	UDEVMAN* udevman = (UDEVMAN*)idevman;
@@ -624,6 +598,32 @@ static void udevman_load_interface(UDEVMAN* udevman)
 	udevman->iface.initialize = udevman_initialize;
 }
 
+static BOOL udevman_parse_device_id_addr(char** str, unsigned long* id1, unsigned long* id2,
+                                         char split_sign, char delimiter)
+{
+	char* mid;
+
+	*id1 = strtoul(*str, &mid, 16);
+
+	if ((mid == *str) || (*mid != split_sign))
+		return FALSE;
+
+	*id2 = strtoul(++mid, str, 16);
+
+	if (*str == mid)
+		return FALSE;
+
+	if (**str == '\0')
+		return TRUE;
+	if (**str == delimiter)
+	{
+		(*str)++;
+		return TRUE;
+	}
+
+	return FALSE;
+}
+
 static BOOL urbdrc_udevman_register_devices(UDEVMAN* udevman, char* devices)
 {
 	char* pos = devices;
@@ -636,7 +636,7 @@ static BOOL urbdrc_udevman_register_devices(UDEVMAN* udevman, char* devices)
 
 		if (udevman->flags & UDEVMAN_FLAG_ADD_BY_VID_PID)
 		{
-			if (id1 > UINT16_MAX || id2 > UINT16_MAX)
+			if ((id1 > UINT16_MAX) || (id2 > UINT16_MAX))
 				return FALSE;
 
 			add_device(&udevman->iface, DEVICE_ADD_FLAG_VENDOR | DEVICE_ADD_FLAG_PRODUCT, 0, 0,
@@ -644,7 +644,7 @@ static BOOL urbdrc_udevman_register_devices(UDEVMAN* udevman, char* devices)
 		}
 		else if (udevman->flags & UDEVMAN_FLAG_ADD_BY_ADDR)
 		{
-			if (id1 > UINT8_MAX || id2 > UINT8_MAX)
+			if ((id1 > UINT8_MAX) || (id2 > UINT8_MAX))
 				return FALSE;
 
 			add_device(&udevman->iface, DEVICE_ADD_FLAG_BUS | DEVICE_ADD_FLAG_DEV, (UINT8)id1,
